@@ -4,11 +4,45 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"sync"
 	"time"
 )
 
 func main() {
+	checkStatus := func(
+		done <-chan interface{},
+		urls ...string,
+	) <-chan *http.Response {
+		responses := make(chan *http.Response)
+		go func() {
+			defer close(responses)
+			for _, url := range urls {
+				resp, err := http.Get(url)
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+				select {
+				case <-done:
+					return
+				case responses <- resp:
+				}
+			}
+		}()
+		return responses
+	}
+
+	done := make(chan interface{})
+	defer close(done)
+
+	urls := []string{"https://www.google.com", "https://badhost"}
+	for response := range checkStatus(done, urls...) {
+		fmt.Printf("Response: %v\n", response.Status)
+	}
+}
+
+func or_channel_pattern() {
 	var or func(channels ...<-chan interface{}) <-chan interface{}
 	or = func(channels ...<-chan interface{}) <-chan interface{} {
 		switch len(channels) {
@@ -35,12 +69,16 @@ func main() {
 				case <-channels[2]:
 				case <-or(append(channels[3:], orDone)...):
 				}
-
 			}
 		}()
 		return orDone
 	}
+	someChan := make(chan interface{})
+	someChan2 := make(chan interface{})
+	<-or(someChan, someChan2)
+
 }
+
 func doneWriteChannel() {
 	newRandStream := func(done <-chan interface{}) (<-chan int, <-chan int) {
 		randStream := make(chan int)
