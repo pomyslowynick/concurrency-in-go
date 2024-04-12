@@ -1,8 +1,11 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+)
 
-func main() {
+func pipelinesExercise() {
 	generator := func(done <-chan interface{}, ints ...int) chan int {
 		outChan := make(chan int)
 		go func() {
@@ -57,4 +60,72 @@ func main() {
 	for val := range mygen {
 		fmt.Println(val)
 	}
+}
+
+func main() {
+	take := func(done chan interface{}, inChan <-chan interface{}, take int) chan interface{} {
+		outChan := make(chan interface{})
+
+		go func() {
+			defer close(outChan)
+			for i := 0; i < take; i++ {
+				select {
+				case <-done:
+					return
+				case outChan <- <-inChan:
+				}
+			}
+		}()
+		return outChan
+	}
+
+	repeater := func(done chan interface{}, values ...int) chan interface{} {
+		outChan := make(chan interface{})
+
+		go func() {
+			defer close(outChan)
+			for {
+				for _, v := range values {
+					select {
+					case <-done:
+						return
+					case outChan <- v:
+					}
+				}
+			}
+		}()
+		return outChan
+	}
+
+	repeatFn := func(done <-chan interface{}, fn func() interface{}) <-chan interface{} {
+		valueStream := make(chan interface{})
+
+		go func() {
+			defer close(valueStream)
+			for {
+				select {
+				case <-done:
+					return
+				case valueStream <- fn():
+				}
+			}
+
+		}()
+
+		return valueStream
+	}
+
+	done := make(chan interface{})
+	defer close(done)
+	rpt := repeater(done, 1, 2)
+
+	taker := take(done, rpt, 5)
+	fmt.Println(<-taker)
+
+	rand := func() interface{} { return rand.Int() }
+
+	for num := range take(done, repeatFn(done, rand), 10) {
+		fmt.Println(num)
+	}
+
 }
