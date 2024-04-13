@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"time"
 )
 
 func pipelinesExercise() {
@@ -11,7 +12,6 @@ func pipelinesExercise() {
 		go func() {
 			defer close(outChan)
 			for _, val := range ints {
-
 				select {
 				case <-done:
 					return
@@ -116,7 +116,7 @@ func main() {
 	}
 
 	done := make(chan interface{})
-	defer close(done)
+	// defer close(done)
 	rpt := repeater(done, 1, 2)
 
 	taker := take(done, rpt, 5)
@@ -124,6 +124,10 @@ func main() {
 
 	rand := func() interface{} { return rand.Int() }
 
+	go func() {
+		time.Sleep(100000 * time.Nanosecond)
+		close(done)
+	}()
 	for num := range take(done, repeatFn(done, rand), 10) {
 		fmt.Println(num)
 	}
